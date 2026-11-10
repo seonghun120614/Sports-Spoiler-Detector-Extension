@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "Sports Spoiler Detector",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuYdTpFJpfkJIEsWS/aAD7I8IT4z6z0LWeOBKyxwtS83c8dba/kkrgllWmEzYKd4oCOa/3KzK4pZmuKe2llJruOX1RPiHLoZZfciNiWkTWmnNYupDH/I+NecXEptIJ+2uv+s2x5/+RC4FQBTWGf0yEmtqvseK4Hi6//R+Upjb/CV1lWI1kTbSMKVJFu+MJqufnWMXj+oRxISULhpIxu7KRfyYLKOEQ7WWSQU0N0s4zKzOe6tQqb+4WwOQhOn7LFIr7aSb9WLbkWCjZ0kYkBDQQ2YnJgDpZaYqdJnyF5l6L7TqwSh8SseCZyVBZ7wOizIqttuIq8NXko/1w8Lq9OYAVQIDAQAB",
+  "description": "On-device AI Chrome Extension for Sports Spoiler Prevention",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "identity",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
+        "image/content.js",
+        "content.js"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "models/spoiler-e5-small/*",
+        "models/spoiler-e5-small/onnx/*",
+        "models/spoiler-e5-small/onnx/model_quantized.onnx",
+        "image/assets/siglip_end2end.onnx",
+        "image/assets/siglip_end2end.onnx.data",
+        "image/assets/*.wasm",
+        "image/assets/*.mjs",
+        "image/assets/*.js",
+        "mask.js"
+      ],
+      "matches": [
+        "*://*.youtube.com/*"
+      ]
+    }
+  ],
+  "host_permissions": [
+    "https://*.youtube.com/*",
+    "https://www.sportspoilerdetector.kro.kr/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  }
+}

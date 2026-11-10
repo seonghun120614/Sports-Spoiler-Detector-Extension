@@ -1,0 +1,14 @@
+{
+  "_name_or_path": "...",
+  "architectures": [
+    "BertForSequenceClassification"
+  ],
+  "id2label": {
+    "0": "spoiler",
+    "1": "safe_non_spoiler"
+  },
+  "label2id": {
+    "spoiler": 0,
+    "safe_non_spoiler": 1
+  }
+}

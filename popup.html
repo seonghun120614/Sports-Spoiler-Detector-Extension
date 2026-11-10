@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Sports Spoiler Detector</title>
+  <!-- Tailwind CSS CDN 연동 -->
+  <link rel="stylesheet" href="tailwind.min.css">
+  <style>
+    /* 익스텐션 팝업 창의 기본 크기 지정 */
+    body {
+      width: 360px;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 p-4 select-none">
+
+  <!-- 1. Header Section -->
+  <header class="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
+    <div class="flex items-center gap-2">
+      <!-- <span class="text-xl">🛡️</span> -->
+      <h1 class="text-lg font-bold">
+        Football Spoiler Shield
+      </h1>
+    </div>
+    <!-- 메인 활성화 토글 스위치 -->
+    <!-- <label class="relative inline-flex items-center cursor-pointer">
+      <input type="checkbox" id="mainToggle" class="sr-only peer" checked>
+      <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+    </label> -->
+  </header>
+
+  <!-- Main Content -->
+  <main class="space-y-5">
+
+    <!-- 1-1. 계정 (OAuth2 로그인) Section -->
+    <section class="space-y-2">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">계정</h2>
+      <div id="loggedOutView" class="p-2.5 bg-slate-800/50 rounded-lg border border-slate-800 space-y-2">
+        <p class="text-xs text-slate-400">구글 계정으로 로그인하면 서버 정밀 검증을 사용할 수 있습니다.</p>
+        <button id="loginBtn" class="w-full py-2 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-50 text-sm font-medium text-white">Google로 로그인</button>
+        <p id="errorMsg" class="text-xs text-red-400 hidden"></p>
+      </div>
+      <div id="loggedInView" class="hidden flex items-center justify-between p-2.5 bg-slate-800/50 rounded-lg border border-slate-800">
+        <div class="min-w-0">
+          <p class="text-xs text-slate-400">로그인됨</p>
+          <p id="userEmail" class="text-sm text-slate-200 truncate"></p>
+        </div>
+        <button id="logoutBtn" class="shrink-0 ml-2 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs text-slate-200">로그아웃</button>
+      </div>
+    </section>
+
+    <!-- 2. AI 모델 설정 Section (드롭다운, 하이브리드 토글 - 추후 업데이트 예정) -->
+    <!-- <section class="space-y-3">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">AI 모델 설정</h2>
+      
+      <div class="space-y-1">
+        <label class="text-xs text-slate-300">분류 분석 모델</label>
+        <select id="modelSelect" class="w-full bg-slate-800 border border-slate-700 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 p-2.5 text-slate-200">
+          <option value="e5-small" selected>E5-Small (스포츠 특화 다국어 경량 모델)</option>
+          <option value="gpt-mini">GPT-4o Mini (클라우드 고성능 모델)</option>
+        </select>
+      </div>
+
+      <div class="flex items-center justify-between p-2.5 bg-slate-800/50 rounded-lg border border-slate-800">
+        <div>
+          <p class="text-sm font-medium text-slate-200">온디맨드 하이브리드 모드</p>
+          <p class="text-xs text-slate-400">확실한 논스포일러를 1차 배제하여 속도 향상</p>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="hybridMode" class="sr-only peer">
+          <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+        </label>
+      </div>
+    </section> -->
+
+    <!-- 3. 필터링 감도 Section -->
+    <section class="space-y-2">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">스포일러 차단 민감도</h2>
+        <span id="sensitivityLabel" class="text-xs font-bold text-orange-400 px-2 py-0.5 bg-orange-500/10 rounded">보통 (간접 포함)</span>
+      </div>
+      <div class="pt-2">
+        <input id="sensitivityRange" type="range" min="1" max="3" value="2" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500">
+        <div class="flex justify-between text-[10px] text-slate-500 px-1 mt-1">
+          <span>느슨하게 (직접만)</span>
+          <span>보통</span>
+          <span>엄격하게 (전체 차단)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 블러 시각 효과 Section (블러 적용 대상[썸네일, 제목]) - 추후 업데이트 예정 -->
+    <!-- <section class="space-y-3">
+      <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">차단 방식 및 UI 효과</h2>
+      
+      <div class="bg-slate-800/30 p-3 rounded-lg space-y-2.5 border border-slate-800/60">
+        <p class="text-xs text-slate-400 mb-1">블러 적용 대상 선택</p>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+            <input type="checkbox" id="blurThumbnail" checked class="w-4 h-4 text-red-600 bg-slate-700 border-slate-600 rounded focus:ring-red-500 focus:ring-offset-slate-900">
+            <span>썸네일 이미지</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+            <input type="checkbox" id="blurTitle" checked class="w-4 h-4 text-red-600 bg-slate-700 border-slate-600 rounded focus:ring-red-500 focus:ring-offset-slate-900">
+            <span>동영상 제목</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-xs text-slate-300">블러 처리 스타일</label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="flex items-center justify-center gap-2 p-2.5 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50 has-[:checked]:border-red-500 has-[:checked]:bg-red-500/10">
+            <input type="radio" name="blurStyle" value="full" checked class="w-4 h-4 text-red-600 border-slate-600 bg-slate-700 focus:ring-red-500">
+            <span class="text-xs font-medium text-slate-200">전체 영구 블러</span>
+          </label>
+          <label class="flex items-center justify-center gap-2 p-2.5 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50 has-[:checked]:border-red-500 has-[:checked]:bg-red-500/10">
+            <input type="radio" name="blurStyle" value="hover" class="w-4 h-4 text-red-600 border-slate-600 bg-slate-700 focus:ring-red-500">
+            <span class="text-xs font-medium text-slate-200">마우스 오버 해제</span>
+          </label>
+        </div>
+      </div>
+    </section> -->
+
+  </main>
+
+  <!-- 5. Footer (상태 표시) -->
+  <footer class="mt-5 pt-3 border-t border-slate-800 text-center">
+    <p class="text-[11px] text-slate-500">On-Device AI Sports Spoiler Prevention</p>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
