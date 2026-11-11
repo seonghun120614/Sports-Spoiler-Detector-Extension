@@ -1,48 +1,207 @@
-# 🚀 유튜브 가변 레이아웃 대응 데이터 스크래퍼 익스텐션 (v1.2.0)
+# Sports Spoiler Detector
 
-이 프로젝트는 유튜브 메인 홈, 검색 결과는 물론 **Shorts 섹션, 주요 뉴스, 최신 동영상 피드** 등 유튜브 내 모든 가변 레이아웃에서 화면에 노출되는 영상의 `Video ID`와 `제목(Title)`을 실시간으로 추출하여 지정된 로컬 서버(Port 80)로 전송하는 크롬 익스텐션입니다.
+An on-device AI Chrome extension that hides sports spoilers (match results, scores, goal highlights, etc.) on YouTube **before you see them**.
 
----
-
-## 📂 프로젝트 파일 구조
-
-* youtube-adaptive-scraper/
-  * manifest.json  (익스텐션 권한 및 타겟 도메인 설정)
-  * content.js     (유튜브 웹페이지 내 영상/Shorts 적응형 스크래핑 로직)
-  * background.js  (추출된 데이터를 백그라운드에서 HTTP POST로 전송)
+Every video card on YouTube is blurred the moment it appears, analyzed locally in the browser by two lightweight ONNX models (one for titles, one for thumbnails), and only revealed once it is judged safe. Suspicious videos are sent to a backend server for precise verification, which returns the exact spoiler regions so that only the spoiling part of a thumbnail or title is masked.
 
 ---
 
-## 🛠️ 크롬 브라우저 등록 방법
+## Features
 
-1. 이 프로젝트 폴더를 다운로드합니다. (또는 공유받은 ZIP 파일 압축 해제)
-2. 구글 크롬 브라우저를 열고 주소창에 `chrome://extensions/`를 입력하여 이동합니다.
-3. 우측 상단의 **'개발자 모드(Developer mode)'** 토글 스위치를 켭니다.
-4. 좌측 상단의 **'압축해제된 확장 프로그램을 로드(Load unpacked)'** 버튼을 클릭합니다.
-5. 이 파일들이 들어있는 최상위 폴더(`youtube-adaptive-scraper`)를 선택하면 등록이 완료됩니다.
-
----
-
-## 🔍 실시간 추출 및 전송 테스트 방법
-
-### 1. 다양한 섹션에서의 스크래핑 확인 (`content.js`)
-* 유튜브 메인 홈이나 검색창에 키워드를 입력해 접속합니다.
-* 키보드 **`F12`**를 눌러 브라우저 개발자 도구를 열고 **`Console`** 탭을 선택합니다.
-* 화면을 아래로 스크롤하면 일반 영상 목록뿐만 아니라 다음과 같은 특수 섹션에서도 중복 없이 실시간으로 추출되는 것을 볼 수 있습니다.
-  * **Shorts 피드** (가로 슬라이드 및 단독 컴포넌트 전체 포함)
-  * **주요 뉴스 선반(Shelf) 섹션**
-  * **채널 전용 추천 동영상 그리드**
-  > 로그 출력 예시: `[★추출 성공] ID: 4Qhe6A5UAqQ | 제목: Ecuador STUNS Germany...`
-
-### 2. 백그라운드 HTTP POST 전송 확인 (`background.js`)
-* `chrome://extensions/` 페이지로 이동합니다.
-* 등록된 익스텐션 카드 내부의 **`뷰 검사: 서비스 워커`** 링크를 클릭합니다.
-* 새 창으로 열린 개발자 도구의 콘솔 창에서, 추출된 데이터들이 로컬 서버(`http://localhost:80/api/video`)로 정상 전송(`fetch`)되는지 확인합니다.
+- **Pre-blocking** – Thumbnails and titles are blurred as soon as they are rendered, so nothing leaks while the analysis is running.
+- **On-device text classification** – A quantized multilingual `e5-small` model (`Non-Spoiler` / `Indirect` / `Direct`) classifies each video title inside the extension's service worker using `transformers.js`.
+- **On-device image classification** – A SigLIP-based ONNX model running on `onnxruntime-web` (WASM) checks each thumbnail.
+- **Hybrid verification** – Only videos flagged as suspicious by the local models are batched (up to 16 at a time) and sent to the backend for detailed analysis.
+- **Partial masking** – The server returns bounding boxes for thumbnails and character spans for titles, so only the spoiler region is covered instead of the whole card.
+- **Fail-safe by default** – If the local model is not ready, inference fails, or the server is unreachable, suspicious videos stay fully blurred.
+- **Works across YouTube layouts** – Home feed, search results, watch-page sidebar, Shorts shelves and the new `*-view-model` lockup components.
+- **Google sign-in** – OAuth2 login through the popup to authenticate requests to the verification server.
 
 ---
 
-## 💡 아키텍처적 특징 (발표 및 시연 포인트)
+## How It Works
 
-* **최신 YouTube View-Model 완벽 대응:** 유튜브가 최근 도입한 `-view-model` 형태의 동적 웹 컴포넌트 아키텍처를 분석하여, 특정 상위 DOM 태그에 종속되지 않는 유연한 크롤링 구조를 가집니다.
-* **우선순위 기반 메타데이터 추출 (Fallback 전략):** 레이아웃 파편화로 인해 제목 위치가 불분명한 문제를 해결하고자 `A 태그 title 속성 ➡️ aria-label 정제 ➡️ 인접 Title 노드 탐색 ➡️ textContent` 순의 단계별 데이터 안전장치를 구축했습니다.
-* **비동기 렌더링 지연 방어:** 썸네일 구조는 로드되었으나 제목 텍스트가 서버로부터 뒤늦게 로딩되는 SPA 환경의 타이밍 이슈를 방어하기 위해, 제목 추출 검증이 완료된 시점에만 데이터 수집 완료 및 중복 방지 처리를 수행합니다.
+```
+ YouTube page (content scripts)                    Service worker (background.js)            Backend
+ ───────────────────────────────                   ──────────────────────────────            ───────
+ 1. New video card detected
+ 2. Pre-block: blur thumbnail + title
+ 3. Image check (image/content.js, SigLIP) ─┐
+ 4. Title check ───────── CLASSIFY_TEXT ────┼────▶ e5-small (local ONNX)
+                                            │
+ 5. Both safe? ── yes ──▶ reveal card        │
+              └─ no ───▶ buffer suspicious   │
+ 6. Buffer full (16) or 2 s elapsed ─ SEND_BATCH_DATA ─▶ POST /api/spoiler ───────────────▶ precise
+                                                                                            verification
+ 7. SPOILER_CHECK_RESULTS ◀──────────────────────────── boxes / spans  ◀─────────────────────┘
+ 8. Reveal safe cards, partially mask spoiler regions (mask.js),
+    or fully blur the card when no region info is available
+```
+
+**Sensitivity** is fixed at **Medium**: anything the models do not label as `Non-Spoiler` (both direct and indirect spoilers) is hidden. A title is treated as safe locally only when the model predicts `Non-Spoiler` with a score of **0.8 or higher**.
+
+---
+
+## Requirements
+
+- Google Chrome (or another Chromium-based browser) with Manifest V3 support
+- [Git LFS](https://git-lfs.com/) – the ONNX model files are stored with Git LFS (~470 MB in total)
+
+---
+
+## Installation
+
+### 1. Clone the repository (with Git LFS)
+
+```bash
+git lfs install
+git clone https://github.com/seonghun120614/Sports-Spoiler-Detector-Extension.git
+cd Sports-Spoiler-Detector-Extension
+git lfs pull
+```
+
+> **Important:** If you download the repository as a ZIP from GitHub, or clone without Git LFS, the `.onnx` files will only be small pointer files and the models will fail to load. Make sure the following files have their real sizes:
+>
+> | File | Approx. size |
+> | --- | --- |
+> | `models/spoiler-e5-small/onnx/model_quantized.onnx` | 114 MB |
+> | `image/assets/siglip_end2end.onnx` | 1 MB |
+> | `image/assets/siglip_end2end.onnx.data` | 354 MB |
+
+### 2. Load the extension in Chrome
+
+1. Open `chrome://extensions/` in the address bar.
+2. Turn on **Developer mode** (toggle in the top-right corner).
+3. Click **Load unpacked** (top-left).
+4. Select the project's root folder (the one that contains `manifest.json`).
+5. *Sports Spoiler Detector* now appears in your extension list. Pin it from the puzzle-piece menu for quick access.
+
+The text model starts loading as soon as the extension is installed.
+
+---
+
+## Usage
+
+1. **Sign in (recommended)**
+   Click the extension icon to open the popup and press **Sign in with Google**. Signing in lets the extension send suspicious videos to the verification server for precise, partial masking. Your signed-in email is shown in the popup; use **Sign out** to log out.
+
+2. **Browse YouTube as usual**
+   Open [youtube.com](https://www.youtube.com). Video cards are briefly blurred while they are analyzed:
+   - **Safe videos** are revealed automatically.
+   - **Spoiler videos** stay hidden – either the spoiling part of the thumbnail/title is masked, or the whole card is blurred and dimmed.
+
+3. **Spoiler sensitivity**
+   The popup shows the current sensitivity, **Medium (incl. indirect)**, which hides both direct and indirect spoilers.
+
+> If you are not signed in or your session has expired, the server may reject requests. In that case the extension falls back to its fail-safe mode and keeps suspicious videos fully blurred. Sign in again from the popup.
+
+---
+
+## Debugging
+
+- **Content scripts (page side):** On a YouTube tab, press `F12` → **Console**. You will see logs such as image model loading, pre-blocking, and `🚨 [Blur Applied] ...` messages.
+- **Service worker (background):** Go to `chrome://extensions/`, find the extension card and click **Inspect views: service worker**. This console shows local title predictions (`[Layer 1 스캔] ...`) and server request/response logs (`[SERVER-DEBUG] ...`).
+- After changing any file, click the **reload** icon on the extension card and refresh the YouTube tab.
+
+---
+
+## Configuration
+
+Backend endpoints are defined in [`config.js`](config.js):
+
+```js
+export const BACKEND_BASE_URL = 'https://www.sportspoilerdetector.kro.kr';
+export const OAUTH_LOGIN_PATH = '/api/oauth/google';
+export const SPOILER_API_PATH = '/api/spoiler';
+```
+
+Tunable constants:
+
+| Constant | File | Default | Description |
+| --- | --- | --- | --- |
+| `LOCAL_SAFE_THRESHOLD` | `background.js` | `0.8` | Minimum `Non-Spoiler` score for a title to be treated as safe locally |
+| `SERVER_BATCH_SIZE` | `content.js` | `16` | Max number of suspicious videos per server request |
+| `SERVER_FLUSH_MS` | `content.js` | `2000` | Max wait time before flushing the server buffer |
+| `IMAGE_VERDICT_TIMEOUT_MS` | `content.js` | `10000` | If the image check does not clear a thumbnail within this time, it is treated as a spoiler |
+
+### Server API
+
+**Request** – `POST /api/spoiler` (with `Authorization: Bearer <accessToken>` when signed in)
+
+```json
+[{ "video_id": "abc123", "title": "Team A 3-1 Team B | Highlights" }]
+```
+
+**Response**
+
+```json
+[{
+  "video_id": "abc123",
+  "title": "Team A 3-1 Team B | Highlights",
+  "width": 1280,
+  "height": 720,
+  "texts":  [{ "label": "Direct", "span": { "start": 7, "end": 10 } }],
+  "images": [{ "label": "Direct", "bounding_box": { "top_left": { "x": 0.1, "y": 0.2 }, "bottom_right": { "x": 0.4, "y": 0.5 } } }]
+}]
+```
+
+Regions whose `label` is anything other than `Non-Spoiler` are masked. Videos missing from the response are treated as safe and revealed.
+
+### OAuth redirect
+
+The OAuth flow uses `chrome.identity.launchWebAuthFlow`. The backend must redirect to:
+
+```
+https://<extension-id>.chromiumapp.org/#accessToken=...&refreshToken=...&email=...&name=...
+```
+
+The `key` field in `manifest.json` pins the extension ID so that this redirect URL stays the same when the extension is loaded unpacked.
+
+---
+
+## Project Structure
+
+```
+.
+├── manifest.json              # Extension manifest (MV3): permissions, content scripts, resources
+├── background.js              # Service worker: local title classification + server batching
+├── auth.js                    # Google OAuth2 sign-in / sign-out and session storage
+├── config.js                  # Backend URL and API paths
+├── content.js                 # YouTube page logic: card scanning, pre-blocking, verdict rendering
+├── mask.js                    # Partial masking of thumbnail regions and title spans
+├── popup.html / popup.js      # Extension popup (account, sensitivity)
+├── tailwind.min.css           # Popup styles
+├── transformers.js            # transformers.js runtime (text model)
+├── test_setfit.js             # Debug helper for the text model
+├── icons/                     # Extension icons
+├── models/spoiler-e5-small/   # Quantized e5-small spoiler classifier (ONNX) + tokenizer
+└── image/
+    ├── content.js             # Thumbnail classifier (bundled, onnxruntime-web)
+    └── assets/                # SigLIP ONNX model + onnxruntime-web WASM binaries
+```
+
+---
+
+## Permissions
+
+| Permission | Why it is needed |
+| --- | --- |
+| `storage` | Store the login session |
+| `identity` | Run the Google OAuth2 sign-in flow |
+| `activeTab` | Interact with the current YouTube tab |
+| `https://*.youtube.com/*` | Run content scripts on YouTube |
+| `https://www.sportspoilerdetector.kro.kr/*` | Send suspicious videos to the verification server |
+
+Only the **video ID and title** of suspicious videos are sent to the server. Safe videos never leave your browser.
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| Everything stays blurred | Check that the model files were pulled with Git LFS (see sizes above), then reload the extension. |
+| `❌ [Layer 1] 모델 로딩 중 에러` in the service worker console | The text model failed to load – usually an LFS pointer file instead of the real model. Run `git lfs pull`. |
+| `[SERVER-DEBUG] ... 401` | Session expired – sign in again from the popup. |
+| Sign-in window closes with an error | Make sure the backend's OAuth redirect URL matches your extension ID (`chrome.identity.getRedirectURL()`). |
+| Changes are not applied | Click reload on `chrome://extensions/` and refresh the YouTube tab. |
