@@ -16,32 +16,21 @@ env.backends.onnx.wasm.proxy = false;
 // 로컬 e5 모델이 'Non-Spoiler' 를 이 점수 이상으로 예측해야 제목을 안전으로 본다
 const LOCAL_SAFE_THRESHOLD = 0.8;
 
-// 팝업 "스포일러 차단 민감도" 슬라이더 (1~3)
-// 1: 느슨하게 → Direct Spoiler 영역만 가림
-// 2: 보통     → Non-Spoiler 를 제외한 영역(Direct/Indirect) 전부 가림
-// 3: 엄격하게 → 서버 요청 없이 의심 영상 전체 차단 (SEND_BATCH_DATA 참고)
-const STRICT_SENSITIVITY = 3;
-
-async function getSensitivity() {
-  const { sensitivity } = await chrome.storage.local.get('sensitivity');
-  return Number(sensitivity) || 2;
-}
-
-function isSpoilerRegion(region, sensitivity) {
-  if (sensitivity <= 1) return region.label === 'Direct Spoiler';
+// 스포일러 차단 민감도는 "보통"으로 고정: Non-Spoiler 를 제외한 영역(Direct/Indirect, label 없음 포함) 전부 가림
+function isSpoilerRegion(region) {
   return region.label !== 'Non-Spoiler';
 }
 
-function toMaskInfo(item, sensitivity) {
+function toMaskInfo(item) {
   return {
     title: item.title,
     width: item.width,
     height: item.height,
     boxes: (item.images || [])
-      .filter(region => isSpoilerRegion(region, sensitivity))
+      .filter(isSpoilerRegion)
       .map(({ bounding_box: { top_left, bottom_right } }) => [top_left.x, top_left.y, bottom_right.x, bottom_right.y]),
     spans: (item.texts || [])
-      .filter(text => isSpoilerRegion(text, sensitivity))
+      .filter(isSpoilerRegion)
       .map(text => [text.span.start, text.span.end])
   };
 }
@@ -125,22 +114,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const serverTargetChunk = message.payload;
       const postAddress = `${BACKEND_BASE_URL}${SPOILER_API_PATH}`;
       let localFilteredResults = [];
-      const sensitivity = await getSensitivity();
-
-      // 💡 엄격하게: 서버에 묻지 않고 의심 영상 전체 차단
-      if (sensitivity >= STRICT_SENSITIVITY && serverTargetChunk.length > 0) {
-        console.log(`🔒 [엄격 모드] 서버 요청 없이 의심 ${serverTargetChunk.length}개 전체 차단`);
-        localFilteredResults = serverTargetChunk.map(video => ({
-          videoId: video.id || video.videoId,
-          isSpoiler: true,
-          reason: "Strict mode (Forced Blur, no server request)"
-        }));
-      }
 
       // -----------------------------------------------------------------
       // 💡 [Layer 2: 위험군 데이터만 서버 정밀 검증 라우팅]
       // -----------------------------------------------------------------
-      else if (serverTargetChunk.length > 0) {
+      if (serverTargetChunk.length > 0) {
         console.log(`🔥 [서버 라우팅] 스포일러 의심 ${serverTargetChunk.length}개 서버 정밀 검증 요청`);
         const debugStartedAt = Date.now();
 
@@ -185,11 +163,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
             // 서버 응답 스펙: [{ video_id, title, width, height, texts, images }] → content.js 스펙 { videoId, isSpoiler, mask }
             const mapped = serverData.map(item => {
-              const mask = toMaskInfo(item, sensitivity); // content.js 부분 가리기용 (썸네일 박스 + 제목 span)
+              const mask = toMaskInfo(item); // content.js 부분 가리기용 (썸네일 박스 + 제목 span)
               const result = {
                 videoId: item.video_id,
                 isSpoiler: mask.boxes.length > 0 || mask.spans.length > 0,
-                reason: `Server boxes ${mask.boxes.length}, spans ${mask.spans.length}, sensitivity ${sensitivity}`,
+                reason: `Server boxes ${mask.boxes.length}, spans ${mask.spans.length}`,
                 mask
               };
               // [DEBUG] 서버 원본 item과 변환된 mask 비교

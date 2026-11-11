@@ -45,7 +45,7 @@ function launchOAuthFlow() {
       { url: `${BACKEND_BASE_URL}${OAUTH_LOGIN_PATH}`, interactive: true },
       (redirectedUrl) => {
         if (chrome.runtime.lastError || !redirectedUrl) {
-          reject(new Error(chrome.runtime.lastError?.message || '로그인에 실패했습니다.'));
+          reject(new Error(chrome.runtime.lastError?.message || 'Sign-in failed.'));
           return;
         }
         resolve(redirectedUrl);
@@ -60,7 +60,7 @@ function parseSession(redirectedUrl) {
   const accessToken = params.get('accessToken');
 
   if (!accessToken) {
-    throw new Error(params.get('error') || '백엔드에서 토큰을 받지 못했습니다.');
+    throw new Error(params.get('error') || 'No token received from the server.');
   }
 
   return {

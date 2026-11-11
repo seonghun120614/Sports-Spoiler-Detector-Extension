@@ -32,18 +32,18 @@ function setError(msg) {
 loginBtn.addEventListener('click', () => {
   setError('');
   loginBtn.disabled = true;
-  loginBtn.textContent = '로그인 중...';
+  loginBtn.textContent = 'Signing in...';
 
   chrome.runtime.sendMessage({ type: 'LOGIN' }, (response) => {
     loginBtn.disabled = false;
-    loginBtn.textContent = 'Google로 로그인';
+    loginBtn.textContent = 'Sign in with Google';
 
     if (chrome.runtime.lastError) {
       setError(chrome.runtime.lastError.message);
       return;
     }
     if (!response?.success) {
-      setError(response?.error ?? '로그인에 실패했습니다.');
+      setError(response?.error ?? 'Sign-in failed.');
       return;
     }
     render(response.session);
@@ -54,24 +54,4 @@ logoutBtn.addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'LOGOUT' }, () => {
     render(null);
   });
-});
-
-// 스포일러 차단 민감도 슬라이더 — 값은 storage에 저장되고 background.js가 서버 판정 시 읽는다.
-const sensitivityRange = document.getElementById('sensitivityRange');
-const sensitivityLabel = document.getElementById('sensitivityLabel');
-const SENSITIVITY_LABELS = { 1: '느슨하게 (직접만)', 2: '보통 (간접 포함)', 3: '엄격하게 (전체 차단)' };
-
-function renderSensitivity(value) {
-  sensitivityRange.value = value;
-  sensitivityLabel.textContent = SENSITIVITY_LABELS[value];
-}
-
-chrome.storage.local.get('sensitivity').then(({ sensitivity }) => {
-  renderSensitivity(Number(sensitivity) || 2);
-});
-
-sensitivityRange.addEventListener('input', () => {
-  const value = Number(sensitivityRange.value);
-  renderSensitivity(value);
-  chrome.storage.local.set({ sensitivity: value });
 });
